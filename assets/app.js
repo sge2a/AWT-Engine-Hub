@@ -1,93 +1,159 @@
 const state = {
   effects: [],
   filtered: [],
-  page: 1,
+  currentPage: 1,
   pageSize: 12,
   totalPages: 1,
 };
 
 const api = {
   async loadIndex() {
-    const res = await fetch('effects/index.json');
+    const res = await fetch('effects/index.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('index not found');
     return res.json();
   },
 };
 
 const els = {
-  grid: document.getElementById('grid'),
-  empty: document.getElementById('empty'),
-  search: document.getElementById('search'),
-  sort: document.getElementById('sort'),
-  modal: document.getElementById('modal'),
-  modalFrame: document.getElementById('modal-frame'),
-  modalClose: document.getElementById('modal-close'),
-  pager: document.getElementById('pager'),
-  pagePrev: document.getElementById('page-prev'),
-  pageNext: document.getElementById('page-next'),
-  pageInfo: document.getElementById('page-info'),
+  grid: document.getElementById('gallery-grid'),
+  empty: document.getElementById('empty-state'),
+  search: document.getElementById('search-input'),
+  sort: document.getElementById('sort-select'),
+  modal: document.getElementById('modal-overlay'),
+  modalFrame: document.getElementById('modal-iframe'),
+  modalClose: document.getElementById('modal-close-btn'),
+  modalCode: document.getElementById('modal-code-btn'),
+  modalDownload: document.getElementById('modal-download-btn'),
+  pagination: document.getElementById('pagination-bar'),
+  statTotal: document.getElementById('stat-total')?.querySelector('.stat-value'),
+  statPages: document.getElementById('stat-pages')?.querySelector('.stat-value'),
 };
 
-function render() {
+function renderEffectCard(effect, prepend = false) {
   const grid = els.grid;
-  grid.innerHTML = '';
-  const items = state.filtered;
+  const card = document.createElement('div');
+  card.className = 'effect-card';
+  card.dataset.id = effect.id;
 
-  if (items.length === 0) {
-    els.empty.style.display = 'block';
-    if (els.pager) els.pager.style.display = 'none';
-    return;
-  }
-  els.empty.style.display = 'none';
-  if (els.pager) els.pager.style.display = 'flex';
+  const timeStr = effect.created_at || '—';
+  const modelColor = effect.color || '#6e56cf';
 
-  const start = (state.page - 1) * state.pageSize;
-  const paged = items.slice(start, start + state.pageSize);
-
-  paged.forEach((effect) => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="preview">
-        <iframe loading="lazy" sandbox="allow-scripts" src="${effect.html}"></iframe>
+  card.innerHTML = `
+    <div class="card-preview" data-id="${effect.id}">
+      <iframe
+        sandbox="allow-scripts"
+        src="${effect.html}"
+        loading="lazy"
+        title="Effect by ${escapeAttr(effect.model || 'AWT')}"
+      ></iframe>
+      <div class="card-preview-overlay">
+        <button class="card-preview-expand">全屏查看</button>
       </div>
-      <div class="meta">
-        <div class="title">${escapeHtml(effect.title)}</div>
-        <div class="info">${escapeHtml(effect.model)}</div>
-        <div class="info">${escapeHtml(effect.theme)}</div>
-        <div class="info">${escapeHtml(effect.technique)}</div>
-        <div class="info">${escapeHtml(effect.created_at)}</div>
+    </div>
+    <div class="card-info">
+      <div class="card-model">
+        <span class="dot" style="background: ${modelColor}"></span>
+        ${escapeHtml(effect.model || 'AWT')}
       </div>
-      <div class="footer">
-        <div class="actions">
-          <a class="btn" href="${effect.code}" target="_blank">Code</a>
-          <a class="btn" href="${effect.html}" download>Download</a>
-          <button class="btn" data-action="fullscreen">Fullscreen</button>
-        </div>
+      <div class="card-theme">${escapeHtml(effect.title || effect.theme || effect.id)}</div>
+    </div>
+    <div class="card-footer">
+      <span class="card-technique">${escapeHtml(effect.technique || 'HTML')}</span>
+      <span class="card-time">${timeStr}</span>
+      <div class="card-actions">
+        <a class="btn-code" href="${effect.html}" target="_blank" title="代码">{ }</a>
+        <a class="btn-download" href="${effect.html}" download title="下载">↓</a>
+        <button class="btn-download" data-action="fullscreen" title="全屏">⤢</button>
       </div>
-    `;
+    </div>
+  `;
 
-    card.querySelector('[data-action="fullscreen"]').addEventListener('click', () => {
-      openModal(effect.html);
-    });
-
-    grid.appendChild(card);
+  card.querySelector('[data-action="fullscreen"]').addEventListener('click', () => {
+    openModal(effect);
+  });
+  card.querySelector('.card-preview').addEventListener('click', () => {
+    openModal(effect);
   });
 
-  updatePager();
+  if (prepend) {
+    grid.prepend(card);
+  } else {
+    grid.appendChild(card);
+  }
 }
 
-function updatePager() {
-  state.totalPages = Math.max(1, Math.ceil(state.filtered.length / state.pageSize));
-  if (state.page > state.totalPages) state.page = state.totalPages;
-  if (els.pageInfo) {
-    els.pageInfo.textContent = `${state.page} / ${state.totalPages}`;
+function renderGallery(items) {
+  els.grid.innerHTML = '';
+  if (!items.length) {
+    els.empty.classList.remove('hidden');
+    if (els.pagination) els.pagination.innerHTML = '';
+    return;
   }
-  const totalEl = document.getElementById('stat-total');
-  const pagesEl = document.getElementById('stat-pages');
-  if (totalEl) totalEl.textContent = String(state.filtered.length);
-  if (pagesEl) pagesEl.textContent = String(state.totalPages);
-  if (els.pagePrev) els.pagePrev.disabled = state.page <= 1;
-  if (els.pageNext) els.pageNext.disabled = state.page >= state.totalPages;
+  els.empty.classList.add('hidden');
+
+  const start = (state.currentPage - 1) * state.pageSize;
+  const paged = items.slice(start, start + state.pageSize);
+  paged.forEach((effect) => renderEffectCard(effect));
+
+  renderPagination();
+  updateStats();
+}
+
+function renderPagination() {
+  const totalEffects = state.filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalEffects / state.pageSize));
+  state.totalPages = totalPages;
+  if (state.currentPage > totalPages) state.currentPage = totalPages;
+
+  if (!els.pagination) return;
+
+  const currentPage = state.currentPage;
+  const start = (currentPage - 1) * state.pageSize + 1;
+  const end = Math.min(currentPage * state.pageSize, totalEffects);
+
+  const pages = [];
+  pages.push(1);
+  if (currentPage > 3) pages.push('...');
+  for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+    pages.push(i);
+  }
+  if (currentPage < totalPages - 2) pages.push('...');
+  if (totalPages > 1) pages.push(totalPages);
+
+  const pageButtons = pages
+    .map((p) => {
+      if (p === '...') return `<span class="pagination-ellipsis">…</span>`;
+      return `<button class="pagination-btn ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+    })
+    .join('');
+
+  els.pagination.innerHTML = `
+    <button class="pagination-btn pagination-nav" data-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''}>
+      ‹ 上一页
+    </button>
+    <div class="pagination-pages">
+      ${pageButtons}
+    </div>
+    <button class="pagination-btn pagination-nav" data-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''}>
+      下一页 ›
+    </button>
+    <span class="pagination-info">${start}-${end} / ${totalEffects}</span>
+  `;
+
+  els.pagination.onclick = (e) => {
+    const btn = e.target.closest('.pagination-btn');
+    if (!btn || btn.disabled) return;
+    const page = parseInt(btn.dataset.page, 10);
+    if (!Number.isNaN(page) && page >= 1 && page <= totalPages) {
+      state.currentPage = page;
+      renderGallery(state.filtered);
+    }
+  };
+}
+
+function updateStats() {
+  if (els.statTotal) els.statTotal.textContent = String(state.filtered.length);
+  if (els.statPages) els.statPages.textContent = String(state.totalPages || 1);
 }
 
 function applyFilter() {
@@ -97,26 +163,39 @@ function applyFilter() {
   let items = state.effects.filter((e) => {
     if (!q) return true;
     return (
-      e.title.toLowerCase().includes(q) ||
-      e.model.toLowerCase().includes(q) ||
-      e.theme.toLowerCase().includes(q) ||
-      e.technique.toLowerCase().includes(q)
+      (e.title || '').toLowerCase().includes(q) ||
+      (e.model || '').toLowerCase().includes(q) ||
+      (e.theme || '').toLowerCase().includes(q) ||
+      (e.technique || '').toLowerCase().includes(q)
     );
   });
 
   items = items.sort((a, b) => {
-    if (sort === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
-    return new Date(b.created_at) - new Date(a.created_at);
+    const da = new Date(a.created_at || 0).getTime();
+    const db = new Date(b.created_at || 0).getTime();
+    if (sort === 'oldest') return da - db;
+    return db - da;
   });
 
   state.filtered = items;
-  state.page = 1;
-  render();
+  state.currentPage = 1;
+  renderGallery(state.filtered);
 }
 
-function openModal(url) {
-  els.modalFrame.src = url;
+function openModal(effect) {
+  els.modalFrame.src = effect.html;
   els.modal.classList.add('active');
+  if (els.modalCode) {
+    els.modalCode.onclick = () => window.open(effect.html, '_blank');
+  }
+  if (els.modalDownload) {
+    els.modalDownload.onclick = () => {
+      const a = document.createElement('a');
+      a.href = effect.html;
+      a.download = '';
+      a.click();
+    };
+  }
 }
 
 function closeModal() {
@@ -133,37 +212,27 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/"/g, '&quot;');
+}
+
 els.search.addEventListener('input', applyFilter);
 els.sort.addEventListener('change', applyFilter);
 els.modalClose.addEventListener('click', closeModal);
 els.modal.addEventListener('click', (e) => {
   if (e.target === els.modal) closeModal();
 });
-
-if (els.pagePrev) {
-  els.pagePrev.addEventListener('click', () => {
-    if (state.page > 1) {
-      state.page -= 1;
-      render();
-    }
-  });
-}
-if (els.pageNext) {
-  els.pageNext.addEventListener('click', () => {
-    if (state.page < state.totalPages) {
-      state.page += 1;
-      render();
-    }
-  });
-}
-
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeModal();
 });
 
 (async function init() {
-  const index = await api.loadIndex();
-  state.effects = index.effects || [];
+  try {
+    const index = await api.loadIndex();
+    state.effects = index.effects || [];
+  } catch (err) {
+    state.effects = [];
+  }
   state.filtered = state.effects;
-  render();
+  renderGallery(state.filtered);
 })();

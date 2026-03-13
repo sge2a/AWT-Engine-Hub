@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AWT Engine Hub</title>
+  <meta name="description" content="Community gallery for AWT-generated effects." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -20,12 +21,12 @@
     </div>
     <div class="header-right">
       <div class="stats-bar" id="stats-bar">
-        <div class="stat">
-          <span class="stat-value" id="stat-total">0</span>
+        <div class="stat" id="stat-total">
+          <span class="stat-value">0</span>
           <span class="stat-label">总效果</span>
         </div>
-        <div class="stat">
-          <span class="stat-value" id="stat-pages">0</span>
+        <div class="stat" id="stat-pages">
+          <span class="stat-value">0</span>
           <span class="stat-label">页数</span>
         </div>
       </div>
@@ -35,13 +36,13 @@
   <section id="control-panel">
     <div class="controls-row controls-row-extra">
       <div class="topic-control">
-        <label for="search">🔎 搜索</label>
-        <input id="search" type="text" placeholder="Search by theme or model" />
+        <label for="search-input">🔎 搜索</label>
+        <input id="search-input" type="text" placeholder="Search by theme or model" />
       </div>
       <div class="dimension-toggle">
         <label>排序</label>
         <div class="toggle-group">
-          <select id="sort" class="select">
+          <select id="sort-select" class="select">
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
           </select>
@@ -53,24 +54,32 @@
     </div>
   </section>
 
-  <section id="gallery" class="gallery-grid" >
-    <div id="grid" class="grid"></div>
-    <div id="empty" class="empty">No effects yet. Submit one via PR!</div>
-  </section>
-
-  <div class="pagination" id="pager">
-    <button class="btn btn-secondary" id="page-prev">上一页</button>
-    <span class="page-info" id="page-info">1 / 1</span>
-    <button class="btn btn-secondary" id="page-next">下一页</button>
-  </div>
-
-  <div id="modal" class="modal">
-    <div class="inner">
-      <button id="modal-close" class="btn close">Close</button>
-      <iframe id="modal-frame" sandbox="allow-scripts" title="Fullscreen"></iframe>
+  <main id="gallery">
+    <div class="gallery-grid" id="gallery-grid"></div>
+    <div class="empty-state hidden" id="empty-state">
+      <div class="empty-icon">✦</div>
+      <h2>暂无作品</h2>
+      <p>提交 PR 来添加你的 AWT 作品</p>
     </div>
+  </main>
+
+  <div class="pagination-bar" id="pagination-bar"></div>
+
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal-header">
+      <div class="modal-info" id="modal-info">
+        <span class="modal-model"></span>
+        <span class="modal-theme"></span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-icon-only" id="modal-code-btn" title="查看代码">{ }</button>
+        <button class="btn btn-icon-only" id="modal-download-btn" title="下载">↓</button>
+        <button class="btn btn-icon-only" id="modal-close-btn" title="关闭">✕</button>
+      </div>
+    </div>
+    <iframe id="modal-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
   </div>
 
-  <script src="assets/app.js"></script>
+  <script type="module" src="assets/app.js"></script>
 </body>
 </html>
