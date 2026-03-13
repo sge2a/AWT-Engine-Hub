@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AWT Engine Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <header id="app-header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="logo-icon">✦</span>
+        <h1>AWT <span class="accent">Engine Hub</span></h1>
+      </div>
+      <p class="tagline">Community gallery for AWT-generated effects</p>
+    </div>
+    <div class="header-right">
+      <div class="stats-bar" id="stats-bar">
+        <div class="stat">
+          <span class="stat-value" id="stat-total">0</span>
+          <span class="stat-label">总效果</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="stat-pages">0</span>
+          <span class="stat-label">页数</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="control-panel">
+    <div class="controls-row controls-row-extra">
+      <div class="topic-control">
+        <label for="search">🔎 搜索</label>
+        <input id="search" type="text" placeholder="Search by theme or model" />
+      </div>
+      <div class="dimension-toggle">
+        <label>排序</label>
+        <div class="toggle-group">
+          <select id="sort" class="select">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+          </select>
+        </div>
+      </div>
+      <div class="evolution-control">
+        <a class="btn btn-primary" href="https://github.com/sge2a/AWT-Engine-Hub/new/main/effects" target="_blank">Submit via PR</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="gallery" class="gallery-grid" >
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty">No effects yet. Submit one via PR!</div>
+  </section>
+
+  <div class="pagination" id="pager">
+    <button class="btn btn-secondary" id="page-prev">上一页</button>
+    <span class="page-info" id="page-info">1 / 1</span>
+    <button class="btn btn-secondary" id="page-next">下一页</button>
+  </div>
+
+  <div id="modal" class="modal">
+    <div class="inner">
+      <button id="modal-close" class="btn close">Close</button>
+      <iframe id="modal-frame" sandbox="allow-scripts" title="Fullscreen"></iframe>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

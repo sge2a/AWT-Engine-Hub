@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0" />
+<title>Galaxy Formation</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0a0a0a;
+  }
+  svg {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+  }
+  .arm {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.9;
+  }
+</style>
+</head>
+<body>
+<svg id="svg" viewBox="-60 -60 120 120" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="coreGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#b3e5fc" stop-opacity="1"/>
+      <stop offset="40%" stop-color="#4fc3f7" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#1a3a5c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="armGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b3e5fc"/>
+      <stop offset="50%" stop-color="#4fc3f7"/>
+      <stop offset="100%" stop-color="#2d6a9f"/>
+    </linearGradient>
+    <filter id="galaxyFilter" x="-50%" y="-50%" width="200%" height="200%">
+      <feTurbulence id="turbulence" type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="2" result="noise"/>
+      <feDisplacementMap id="displace" in="SourceGraphic" in2="noise" scale="6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+
+  <rect x="-100" y="-100" width="200" height="200" fill="#0a0a0a"/>
+
+  <g id="stars"></g>
+
+  <g id="galaxy" filter="url(#galaxyFilter)">
+    <circle r="12" fill="url(#coreGradient)" />
+    <g id="arms"></g>
+  </g>
+</svg>
+
+<script>
+(() => {
+  const svg = document.getElementById('svg');
+  const armsGroup = document.getElementById('arms');
+  const starsGroup = document.getElementById('stars');
+  const turb = document.getElementById('turbulence');
+  const disp = document.getElementById('displace');
+  const galaxy = document.getElementById('galaxy');
+  
+  const colors = ['#b3e5fc', '#4fc3f7', '#2d6a9f', '#1a3a5c'];
+  const armCount = 3;
+  const points = 320;
+
+  for (let a = 0; a < armCount; a++) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    let d = '';
+    for (let i = 0; i < points; i++) {
+      const t = i / (points - 1);
+      const angle = t * 12 + (a * (Math.PI * 2 / armCount));
+      const radius = t * 52;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      d += (i === 0 ? 'M' : 'L') + x.toFixed(2) + ' ' + y.toFixed(2) + ' ';
+    }
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', 'url(#armGradient)');
+    path.setAttribute('stroke-width', (1.2 + a * 0.6).toString());
+    path.setAttribute('class', 'arm');
+    armsGroup.appendChild(path);
+  }
+
+  for (let i = 0; i < 160; i++) {
+    const star = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    const x = (Math.random() - 0.5) * 200;
+    const y = (Math.random() - 0.5) * 200;
+    const r = Math.random() * 0.6 + 0.2;
+    star.setAttribute('cx', x);
+    star.setAttribute('cy', y);
+    star.setAttribute('r', r);
+    star.setAttribute('fill', colors[Math.floor(Math.random() * colors.length)]);
+    star.setAttribute('opacity', Math.random() * 0.5 + 0.2);
+    starsGroup.appendChild(star);
+  }
+
+  let t = 0;
+  const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
+  const ease = (a, b, t) => a + (b - a) * (1 - Math.cos(t * Math.PI)) / 2;
+
+  window.addEventListener('pointermove', (e) => {
+    const rect = svg.getBoundingClientRect();
+    mouse.tx = (e.clientX / rect.width - 0.5) * 2;
+    mouse.ty = (e.clientY / rect.height - 0.5) * 2;
+  });
+
+  function animate() {
+    t += 0.0035;
+    mouse.x = ease(mouse.x, mouse.tx, 0.05);
+    mouse.y = ease(mouse.y, mouse.ty, 0.05);
+
+    const rot = t * 30 + mouse.x * 10;
+    const scale = 1 + Math.sin(t * 2) * 0.01;
+    galaxy.setAttribute('transform', `translate(${mouse.x * 4}, ${mouse.y * 4}) rotate(${rot}) scale(${scale})`);
+
+    const bf = 0.012 + Math.sin(t * 1.5) * 0.002;
+    turb.setAttribute('baseFrequency', bf.toFixed(4));
+    turb.setAttribute('seed', Math.floor((t * 10) % 100));
+    disp.setAttribute('scale', (6 + Math.sin(t * 3) * 1.5).toFixed(2));
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+})();
+</script>
+</body>
+</html>
