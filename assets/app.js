@@ -207,18 +207,6 @@ function escapeHtml(str) {
 function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, '&quot;');
 }
-
-undefined
-els.sort.addEventListener('change', applyFilter);
-els.modalClose.addEventListener('click', closeModal);
-els.modal.addEventListener('click', (e) => {
-  if (e.target === els.modal) closeModal();
-});
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeModal();
-});
-
-
 els.search.addEventListener('input', applyFilter);
 els.sort.addEventListener('change', applyFilter);
 if (els.pageSizeInput) {
