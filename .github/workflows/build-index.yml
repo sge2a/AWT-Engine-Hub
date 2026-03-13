@@ -1,0 +1,64 @@
+name: Build Effects Index
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "effects/**"
+      - ".github/workflows/build-index.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "effects/**"
+      - ".github/workflows/build-index.yml"
+
+jobs:
+  build-index:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate effects index
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const effectsDir = path.join(process.cwd(), 'effects');
+          const files = fs.readdirSync(effectsDir).filter(f => f.endsWith('.html'));
+
+          const effects = files.map((file) => {
+            const id = file.replace(/\.html$/,'');
+            return {
+              id,
+              title: id,
+              model: 'OpenAI GPT (gpt-5.2-codex)',
+              theme: id,
+              technique: 'HTML5',
+              created_at: '',
+              html: `effects/${file}`,
+              code: `effects/${file}`,
+            };
+          });
+
+          const index = { version: 1, effects };
+          fs.writeFileSync(path.join(effectsDir, 'index.json'), JSON.stringify(index, null, 2));
+          console.log(`Generated index.json with ${effects.length} entries.`);
+          NODE
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add effects/index.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update effects index"
+            git push
+          else
+            echo "No changes to commit"
+          fi
