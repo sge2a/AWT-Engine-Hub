@@ -2,8 +2,9 @@ const state = {
   effects: [],
   filtered: [],
   currentPage: 1,
-  pageSize: 12,
-  totalPages: 1,
+  pageSize: 8,
+  minPageSize: 4,
+  maxPageSize: 20,
 };
 
 const api = {
@@ -24,6 +25,7 @@ const els = {
   modalClose: document.getElementById('modal-close-btn'),
   modalCode: document.getElementById('modal-code-btn'),
   modalDownload: document.getElementById('modal-download-btn'),
+  pageSizeInput: document.getElementById('page-size-input'),
   pagination: document.getElementById('pagination-bar'),
   statTotal: document.getElementById('stat-total')?.querySelector('.stat-value'),
   statPages: document.getElementById('stat-pages')?.querySelector('.stat-value'),
@@ -182,20 +184,10 @@ function applyFilter() {
   renderGallery(state.filtered);
 }
 
-function openModal(effect) {
-  els.modalFrame.src = effect.html;
-  els.modal.classList.add('active');
-  if (els.modalCode) {
-    els.modalCode.onclick = () => window.open(effect.html, '_blank');
-  }
-  if (els.modalDownload) {
-    els.modalDownload.onclick = () => {
-      const a = document.createElement('a');
-      a.href = effect.html;
-      a.download = '';
-      a.click();
-    };
-  }
+function clampPageSize(value) {
+  const n = parseInt(value, 10);
+  if (Number.isNaN(n)) return state.pageSize;
+  return Math.max(state.minPageSize, Math.min(state.maxPageSize, n));
 }
 
 function closeModal() {
@@ -216,8 +208,29 @@ function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, '&quot;');
 }
 
+undefined
+els.sort.addEventListener('change', applyFilter);
+els.modalClose.addEventListener('click', closeModal);
+els.modal.addEventListener('click', (e) => {
+  if (e.target === els.modal) closeModal();
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
+
+
 els.search.addEventListener('input', applyFilter);
 els.sort.addEventListener('change', applyFilter);
+if (els.pageSizeInput) {
+  els.pageSizeInput.value = state.pageSize;
+  els.pageSizeInput.addEventListener('change', () => {
+    const val = clampPageSize(els.pageSizeInput.value);
+    state.pageSize = val;
+    els.pageSizeInput.value = val;
+    state.currentPage = 1;
+    renderGallery(state.filtered);
+  });
+}
 els.modalClose.addEventListener('click', closeModal);
 els.modal.addEventListener('click', (e) => {
   if (e.target === els.modal) closeModal();
@@ -236,3 +249,19 @@ window.addEventListener('keydown', (e) => {
   state.filtered = state.effects;
   renderGallery(state.filtered);
 })();
+
+function openModal(effect) {
+  els.modalFrame.src = effect.html;
+  els.modal.classList.add('active');
+  if (els.modalCode) {
+    els.modalCode.onclick = () => window.open(effect.html, '_blank');
+  }
+  if (els.modalDownload) {
+    els.modalDownload.onclick = () => {
+      const a = document.createElement('a');
+      a.href = effect.html;
+      a.download = '';
+      a.click();
+    };
+  }
+}
