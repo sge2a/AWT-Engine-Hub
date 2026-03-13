@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Watercolor Fireworks</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#0a0a0a;}
+canvas{display:block;width:100vw;height:100vh;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, dpr;
+
+  // Sakura palette
+  const palette = ['#1a0a1a', '#3d1c3d', '#8b408b', '#ff69b4', '#ffc0cb'];
+  const paletteRGB = palette.map(hexToRgb);
+
+  // Cached soft circles for watercolor blooms
+  const softCache = palette.map(c => createSoftCircle(c));
+
+  // Precomputed background gradient
+  let bgGradient;
+
+  const rockets = [];
+  const particles = [];
+  const blooms = [];
+  const embers = [];
+
+  const pointer = {x:0.5, y:0.5, active:false, down:false};
+
+  let lastTime = 0;
+  let spawnTimer = 0;
+
+  function resize(){
+    dpr = devicePixelRatio || 1;
+    w = innerWidth; h = innerHeight;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    bgGradient = ctx.createLinearGradient(0,0,0,h);
+    bgGradient.addColorStop(0,'rgba(26,10,26,0.7)');
+    bgGradient.addColorStop(1,'rgba(10,10,10,0)');
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  addEventListener('pointermove', e=>{
+    pointer.x = e.clientX / w;
+    pointer.y = e.clientY / h;
+    pointer.active = true;
+  });
+  addEventListener('pointerleave', ()=>pointer.active=false);
+  addEventListener('pointerdown', e=>{
+    pointer.down = true;
+    spawnExplosion(e.clientX, e.clientY, palette[(Math.random()*palette.length)|0]);
+  });
+  addEventListener('pointerup', ()=>pointer.down=false);
+
+  function rand(min=0,max=1){return min + (max-min)*Math.random();}
+  function easeOutCubic(t){return 1 - Math.pow(1-t,3);}
+  function easeInOutSine(t){return -(Math.cos(Math.PI*t)-1)/2;}
+
+  function spawnRocket(){
+    const x = rand(0.2,0.8)*w;
+    const y = h + 20;
+    const tx = pointer.active ? (pointer.x*w*0.7 + rand(0.15,0.85)*w*0.3) : rand(0.2,0.8)*w;
+    const ty = pointer.active ? (pointer.y*h*0.7 + rand(0.2,0.5)*h*0.3) : rand(0.2,0.5)*h;
+    const dx = tx - x;
+    const dy = ty - y;
+    const dist = Math.hypot(dx,dy);
+    const speed = rand(450,620);
+    rockets.push({
+      x,y,
+      vx: dx/dist*speed,
+      vy: dy/dist*speed,
+      tx, ty,
+      color: palette[(Math.random()*palette.length)|0],
+      life: 0,
+      maxLife: dist / speed
+    });
+  }
+
+  function spawnExplosion(x,y,color){
+    const count = 120 + (Math.random()*80|0);
+    for(let i=0;i<count;i++){
+      const ang = (i/count)*Math.PI*2 + rand(-0.25,0.25);
+      const spd = rand(40,180);
+      particles.push({
+        x,y,
+        vx: Math.cos(ang)*spd,
+        vy: Math.sin(ang)*spd,
+        life: 0,
+        dur: rand(1.2,2.6),
+        size: rand(0.8,2.0),
+        color
+      });
+    }
+    for(let i=0;i<10;i++){
+      embers.push({
+        x,y,
+        vx: rand(-30,30),
+        vy: rand(20,80),
+        life: 0,
+        dur: rand(2.5,4.0),
+        color
+      });
+    }
+    for(let i=0;i<4;i++){
+      blooms.push({
+        x: x + rand(-20,20),
+        y: y + rand(-20,20),
+        r: rand(80,160),
+        life: 0,
+        dur: rand(1.8,3.2),
+        color
+      });
+    }
+  }
+
+  function update(dt){
+    spawnTimer += dt;
+    if(spawnTimer > 0.8){
+      spawnTimer = 0;
+      if(rockets.length < 5) spawnRocket();
+    }
+
+    // Update rockets
+    for(let i=rockets.length-1;i>=0;i--){
+      const r = rockets[i];
+      r.life += dt;
+      r.x += r.vx*dt;
+      r.y += r.vy*dt;
+      // trail particles
+      for(let t=0;t<2;t++){
+        particles.push({
+          x: r.x + rand(-2,2),
+          y: r.y + rand(-2,2),
+          vx: rand(-20,20),
+          vy: rand(-10,10),
+          life: 0,
+          dur: rand(0.4,0.7),
+          size: rand(0.6,1.2),
+          color: r.color
+        });
+      }
+      if(r.life >= r.maxLife || r.y <= r.ty){
+        spawnExplosion(r.x,r.y,r.color);
+        rockets.splice(i,1);
+      }
+    }
+
+    // Update particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.life += dt;
+      p.vx *= 0.985;
+      p.vy += 30*dt;
+      p.x += p.vx*dt;
+      p.y += p.vy*dt;
+      if(p.life >= p.dur) particles.splice(i,1);
+    }
+
+    // Update blooms
+    for(let i=blooms.length-1;i>=0;i--){
+      const b = blooms[i];
+      b.life += dt;
+      if(b.life >= b.dur) blooms.splice(i,1);
+    }
+
+    // Update embers
+    for(let i=embers.length-1;i>=0;i--){
+      const e = embers[i];
+      e.life += dt;
+      e.vx *= 0.99;
+      e.vy += 15*dt;
+      e.x += e.vx*dt;
+      e.y += e.vy*dt;
+      if(e.life >= e.dur) embers.splice(i,1);
+    }
+
+    // Cap sizes for performance
+    if(particles.length > 1200) particles.splice(0, particles.length-1200);
+    if(blooms.length > 40) blooms.splice(0, blooms.length-40);
+    if(embers.length > 200) embers.splice(0, embers.length-200);
+  }
+
+  function draw(){
+    // fade with dark wash
+    ctx.fillStyle = 'rgba(10,10,10,0.12)';
+    ctx.fillRect(0,0,w,h);
+
+    // subtle static gradient
+    ctx.fillStyle = bgGradient;
+    ctx.globalAlpha = 0.22;
+    ctx.fillRect(0,0,w,h);
+    ctx.globalAlpha = 1;
+
+    // Watercolor blooms
+    ctx.globalCompositeOperation = 'lighter';
+    for(const b of blooms){
+      const t = b.life / b.dur;
+      const e = easeOutCubic(1 - t);
+      const img = softCache[palette.indexOf(b.color)];
+      const size = b.r * (0.6 + 0.6*easeInOutSine(t));
+      ctx.globalAlpha = 0.18 * e;
+      ctx.drawImage(img, b.x - size, b.y - size, size*2, size*2);
+    }
+    ctx.globalAlpha = 1;
+
+    // Firework particles
+    ctx.lineWidth = 1.2;
+    for(const p of particles){
+      const t = p.life / p.dur;
+      const e = easeOutCubic(1 - t);
+      ctx.strokeStyle = `rgba(${hexToRgb(p.color).join(',')},${0.8*e})`;
+      const len = 8 * e;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.vx*0.02*len, p.y - p.vy*0.02*len);
+      ctx.stroke();
+    }
+
+    // Embers
+    ctx.fillStyle = 'rgba(255,192,203,0.5)';
+    for(const e of embers){
+      const t = e.life / e.dur;
+      const a = 0.5 * (1 - t);
+      ctx.fillStyle = `rgba(${hexToRgb(e.color).join(',')},${a})`;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, 1.5 + 2*(1-t), 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Rockets glow
+    for(const r of rockets){
+      ctx.fillStyle = `rgba(${hexToRgb(r.color).join(',')},0.8)`;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, 2.2, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Pointer ripple
+    if(pointer.active){
+      const px = pointer.x*w;
+      const py = pointer.y*h;
+      const t = performance.now()*0.002;
+      ctx.strokeStyle = 'rgba(255,105,180,0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(px,py,30+10*Math.sin(t),0,Math.PI*2);
+      ctx.stroke();
+    }
+  }
+
+  function loop(t){
+    const now = t*0.001;
+    const dt = Math.min(now - lastTime, 0.033) || 0.016;
+    lastTime = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // Helpers
+  function hexToRgb(hex){
+    const bigint = parseInt(hex.slice(1), 16);
+    return [(bigint>>16)&255, (bigint>>8)&255, bigint&255];
+  }
+  function createSoftCircle(hex){
+    const c = document.createElement('canvas');
+    const s = 128;
+    c.width = c.height = s;
+    const cx = c.getContext('2d');
+    const g = cx.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    const [r,gc,b] = hexToRgb(hex);
+    g.addColorStop(0, `rgba(${r},${gc},${b},0.9)`);
+    g.addColorStop(1, `rgba(${r},${gc},${b},0)`);
+    cx.fillStyle = g;
+    cx.fillRect(0,0,s,s);
+    return c;
+  }
+})();
+</script>
+</body>
+</html>

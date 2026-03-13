@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cosmic Geometric Fireworks</title>
+<style>
+html,body{
+  margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+  background:#0a0a0a;
+}
+canvas{display:block; width:100vw; height:100vh;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(()=> {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: true });
+  let w=0,h=0,dpr=1;
+
+  // Palette (cosmic purple high-contrast)
+  const palette = ['#0d0015','#1a0033','#6a0dad','#9b59b6','#d4a5ff'];
+  const rgb = palette.map(hexToRgb);
+  const glowSprites = palette.map((c,i)=>createGlowSprite(rgb[i]));
+  const starSprite = createStarSprite();
+
+  // State
+  const rockets=[], particles=[], sparks=[], rings=[], stars=[];
+  const pointer = {x:0.5,y:0.7,active:false,down:false};
+  let last=0, spawn=0;
+
+  // Settings
+  const gravity=40;
+  const maxParticles=1600;
+  const maxRings=60;
+  const maxSparks=400;
+
+  function resize(){
+    dpr = devicePixelRatio || 1;
+    w = innerWidth; h = innerHeight;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    initStars();
+  }
+  addEventListener('resize',resize);
+  resize();
+
+  // Pointer interactions
+  addEventListener('pointermove',e=>{
+    pointer.x = e.clientX / w;
+    pointer.y = e.clientY / h;
+    pointer.active = true;
+  });
+  addEventListener('pointerleave',()=>pointer.active=false);
+  addEventListener('pointerdown',e=>{
+    pointer.down=true;
+    spawnExplosion(e.clientX,e.clientY,randPalette());
+  });
+  addEventListener('pointerup',()=>pointer.down=false);
+
+  function initStars(){
+    stars.length=0;
+    const count = Math.min(200, (w*h)/5000);
+    for(let i=0;i<count;i++){
+      stars.push({
+        x:Math.random()*w,
+        y:Math.random()*h,
+        a:Math.random()*0.6+0.2,
+        r:Math.random()*1.3+0.4,
+        tw:Math.random()*2+1
+      });
+    }
+  }
+
+  function spawnRocket(){
+    const x = rand(0.15,0.85)*w;
+    const y = h+20;
+    const tx = pointer.active ? (pointer.x*w*0.8 + rand(-80,80)) : rand(0.2,0.8)*w;
+    const ty = pointer.active ? (pointer.y*h*0.6 + rand(-60,60)) : rand(0.2,0.5)*h;
+    const dx=tx-x, dy=ty-y;
+    const dist=Math.hypot(dx,dy);
+    const speed=rand(520,700);
+    rockets.push({
+      x,y,tx,ty,
+      vx:dx/dist*speed, vy:dy/dist*speed,
+      life:0, maxLife:dist/speed,
+      color: randPalette(),
+      spin: rand(-3,3)
+    });
+  }
+
+  function spawnExplosion(x,y,color){
+    // shock rings
+    const ringCount = 2 + (Math.random()*2|0);
+    for(let i=0;i<ringCount;i++){
+      rings.push({x,y,r:0,life:0,dur:rand(0.7,1.4),color,th:rand(1.2,2.4)});
+    }
+
+    // geometric burst particles
+    const count = 140 + (Math.random()*120|0);
+    for(let i=0;i<count;i++){
+      const ang = (i/count)*Math.PI*2 + rand(-0.2,0.2);
+      const spd = rand(60,260);
+      const shape = Math.random()<0.5 ? 'line' : (Math.random()<0.5?'square':'tri');
+      particles.push({
+        x,y, vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+        life:0, dur:rand(1.0,2.4),
+        size:rand(1.5,3.5), color,
+        rot:rand(0,Math.PI), spin:rand(-6,6),
+        shape
+      });
+    }
+
+    // trailing sparks
+    for(let i=0;i<22;i++){
+      sparks.push({
+        x,y, vx:rand(-50,50), vy:rand(10,120),
+        life:0, dur:rand(1.8,3.2),
+        color, size:rand(0.8,2.1)
+      });
+    }
+  }
+
+  function update(dt){
+    spawn += dt;
+    const rate = pointer.down ? 0.35 : 0.7;
+    if(spawn>rate){
+      spawn=0;
+      if(rockets.length<6) spawnRocket();
+    }
+
+    // rockets
+    for(let i=rockets.length-1;i>=0;i--){
+      const r=rockets[i];
+      r.life+=dt;
+      r.x+=r.vx*dt; r.y+=r.vy*dt;
+      // trail
+      for(let t=0;t<2;t++){
+        particles.push({
+          x:r.x+rand(-2,2), y:r.y+rand(-2,2),
+          vx:rand(-25,25), vy:rand(-15,15),
+          life:0, dur:rand(0.3,0.6),
+          size:rand(0.8,1.6), color:r.color,
+          rot:rand(0,Math.PI), spin:rand(-3,3),
+          shape:'line'
+        });
+      }
+      if(r.life>=r.maxLife || r.y<=r.ty){
+        spawnExplosion(r.x,r.y,r.color);
+        rockets.splice(i,1);
+      }
+    }
+
+    // particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.life+=dt;
+      p.vx*=0.988;
+      p.vy+=gravity*dt;
+      p.x+=p.vx*dt; p.y+=p.vy*dt;
+      p.rot+=p.spin*dt;
+      if(p.life>=p.dur) particles.splice(i,1);
+    }
+
+    // rings
+    for(let i=rings.length-1;i>=0;i--){
+      const r=rings[i];
+      r.life+=dt;
+      r.r += 420*dt;
+      if(r.life>=r.dur) rings.splice(i,1);
+    }
+
+    // sparks
+    for(let i=sparks.length-1;i>=0;i--){
+      const s=sparks[i];
+      s.life+=dt;
+      s.vx*=0.98;
+      s.vy+=gravity*0.6*dt;
+      s.x+=s.vx*dt; s.y+=s.vy*dt;
+      if(s.life>=s.dur) sparks.splice(i,1);
+    }
+
+    // caps
+    if(particles.length>maxParticles) particles.splice(0,particles.length-maxParticles);
+    if(rings.length>maxRings) rings.splice(0,rings.length-maxRings);
+    if(sparks.length>maxSparks) sparks.splice(0,sparks.length-maxSparks);
+  }
+
+  function draw(){
+    // Fade background
+    ctx.fillStyle='rgba(10,10,10,0.2)';
+    ctx.fillRect(0,0,w,h);
+
+    // Stars
+    ctx.globalCompositeOperation='source-over';
+    for(const s of stars){
+      const tw = 0.5+0.5*Math.sin((performance.now()*0.001)*s.tw + s.x*0.01);
+      ctx.globalAlpha = s.a*tw;
+      ctx.drawImage(starSprite, s.x-s.r*4, s.y-s.r*4, s.r*8, s.r*8);
+    }
+    ctx.globalAlpha=1;
+
+    // Rings
+    ctx.globalCompositeOperation='lighter';
+    for(const r of rings){
+      const t=r.life/r.dur;
+      const a=(1-t);
+      const col = rgb[palette.indexOf(r.color)];
+      ctx.strokeStyle=`rgba(${col[0]},${col[1]},${col[2]},${0.35*a})`;
+      ctx.lineWidth=r.th*(1+2*t);
+      ctx.beginPath();
+      ctx.arc(r.x,r.y,r.r*(0.6+0.6*easeOutCubic(t)),0,Math.PI*2);
+      ctx.stroke();
+    }
+
+    // Particles
+    for(const p of particles){
+      const t=p.life/p.dur;
+      const e = easeOutCubic(1-t);
+      const col = rgb[palette.indexOf(p.color)];
+      ctx.globalAlpha = 0.9*e;
+      ctx.strokeStyle=`rgba(${col[0]},${col[1]},${col[2]},${0.9*e})`;
+      ctx.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},${0.7*e})`;
+      if(p.shape==='line'){
+        ctx.lineWidth=1.2;
+        const len = 10*e;
+        ctx.beginPath();
+        ctx.moveTo(p.x,p.y);
+        ctx.lineTo(p.x - p.vx*0.03*len, p.y - p.vy*0.03*len);
+        ctx.stroke();
+      }else if(p.shape==='square'){
+        ctx.save();
+        ctx.translate(p.x,p.y);
+        ctx.rotate(p.rot);
+        const s = p.size*2.2*(0.7+0.6*e);
+        ctx.fillRect(-s/2,-s/2,s,s);
+        ctx.restore();
+      }else{
+        ctx.save();
+        ctx.translate(p.x,p.y);
+        ctx.rotate(p.rot);
+        const s=p.size*2.8*(0.7+0.6*e);
+        ctx.beginPath();
+        ctx.moveTo(0,-s/2);
+        ctx.lineTo(-s/2,s/2);
+        ctx.lineTo(s/2,s/2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // glow sprite
+      if(e>0.2){
+        const g = glowSprites[palette.indexOf(p.color)];
+        const size = 18*e;
+        ctx.globalAlpha = 0.3*e;
+        ctx.drawImage(g, p.x-size, p.y-size, size*2, size*2);
+      }
+    }
+
+    // Sparks
+    for(const s of sparks){
+      const t=s.life/s.dur;
+      const e = 1-t;
+      const col = rgb[palette.indexOf(s.color)];
+      ctx.globalAlpha = 0.6*e;
+      ctx.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},${0.6*e})`;
+      ctx.beginPath();
+      ctx.arc(s.x,s.y,s.size*(0.8+0.7*e),0,Math.PI*2);
+      ctx.fill();
+    }
+
+    // Rockets glow
+    for(const r of rockets){
+      const col = rgb[palette.indexOf(r.color)];
+      ctx.globalAlpha=0.9;
+      ctx.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},0.8)`;
+      ctx.beginPath();
+      ctx.arc(r.x,r.y,2.6,0,Math.PI*2);
+      ctx.fill();
+      const g = glowSprites[palette.indexOf(r.color)];
+      ctx.globalAlpha=0.5;
+      ctx.drawImage(g, r.x-14, r.y-14, 28, 28);
+    }
+
+    // Pointer pulse
+    if(pointer.active){
+      const px=pointer.x*w, py=pointer.y*h;
+      const t=performance.now()*0.002;
+      ctx.globalAlpha=0.3;
+      ctx.strokeStyle='rgba(212,165,255,0.35)';
+      ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.arc(px,py,26+8*Math.sin(t),0,Math.PI*2);
+      ctx.stroke();
+    }
+
+    ctx.globalCompositeOperation='source-over';
+    ctx.globalAlpha=1;
+  }
+
+  function loop(ts){
+    const now=ts*0.001;
+    const dt=Math.min(now-last,0.033)||0.016;
+    last=now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // Helpers
+  function rand(min=0,max=1){return min+(max-min)*Math.random();}
+  function easeOutCubic(t){return 1-Math.pow(1-t,3);}
+  function randPalette(){return palette[(Math.random()*palette.length)|0];}
+  function hexToRgb(hex){
+    const v=parseInt(hex.slice(1),16);
+    return [(v>>16)&255,(v>>8)&255,v&255];
+  }
+  function createGlowSprite([r,g,b]){
+    const c=document.createElement('canvas');
+    const s=64; c.width=c.height=s;
+    const x=c.getContext('2d');
+    const grd=x.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    grd.addColorStop(0,`rgba(${r},${g},${b},0.9)`);
+    grd.addColorStop(0.5,`rgba(${r},${g},${b},0.3)`);
+    grd.addColorStop(1,`rgba(${r},${g},${b},0)`);
+    x.fillStyle=grd; x.fillRect(0,0,s,s);
+    return c;
+  }
+  function createStarSprite(){
+    const c=document.createElement('canvas');
+    const s=32; c.width=c.height=s;
+    const x=c.getContext('2d');
+    const g=x.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    g.addColorStop(0,'rgba(212,165,255,0.9)');
+    g.addColorStop(1,'rgba(212,165,255,0)');
+    x.fillStyle=g; x.fillRect(0,0,s,s);
+    return c;
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>放烟花 - Ocean Fireworks</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#0a0a0a;}
+canvas{display:block;width:100vw;height:100vh;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, dpr, bgGrad;
+
+  // Palette: deep ocean
+  const paletteHex = ['#0a1628','#1a3a5c','#2d6a9f','#4fc3f7','#b3e5fc'];
+  const palette = paletteHex.map(h=>{
+    const n=parseInt(h.slice(1),16);
+    return {r:(n>>16)&255,g:(n>>8)&255,b:n&255,hex:h};
+  });
+
+  // Pointer interaction
+  const pointer = {x:0,y:0,active:false,down:false};
+
+  // RNG
+  let rng = mulberry32(123456789);
+  const rand = (a=0,b=1)=>a+(b-a)*rng();
+
+  // Pools
+  const rockets=[], sparks=[], embers=[], rings=[], stars=[];
+  const sparkPool=[], emberPool=[], ringPool=[];
+
+  let lastTime = 0, spawnTimer = 0;
+
+  function resize(){
+    dpr = devicePixelRatio || 1;
+    w = innerWidth; h = innerHeight;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    // Precompute background gradient
+    bgGrad = ctx.createLinearGradient(0,0,0,h);
+    bgGrad.addColorStop(0,'rgba(10,22,40,0.9)');
+    bgGrad.addColorStop(1,'rgba(10,10,10,1)');
+
+    // Stars
+    stars.length = 0;
+    const count = Math.floor((w*h)/15000);
+    for(let i=0;i<count;i++){
+      stars.push({
+        x: rand(0,w),
+        y: rand(0,h*0.8),
+        r: rand(0.5,1.5),
+        a: rand(0.1,0.6),
+        tw: rand(0.001,0.004)
+      });
+    }
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  addEventListener('pointermove', e=>{
+    pointer.x = e.clientX; pointer.y = e.clientY; pointer.active = true;
+  });
+  addEventListener('pointerleave', ()=>pointer.active=false);
+  addEventListener('pointerdown', e=>{
+    pointer.down = true;
+    spawnRocket(e.clientX, e.clientY, true);
+  });
+  addEventListener('pointerup', ()=>pointer.down=false);
+
+  // --- Utilities ---
+  function mulberry32(a){
+    return function(){
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ t>>>15, t | 1);
+      t ^= t + Math.imul(t ^ t>>>7, t | 61);
+      return ((t ^ t>>>14) >>> 0) / 4294967296;
+    }
+  }
+  const easeOutCubic = t => 1 - Math.pow(1-t,3);
+  const easeInOutSine = t => -(Math.cos(Math.PI*t)-1)/2;
+  const clamp = (v,a,b)=>v<a?a:v>b?b:v;
+
+  function rgba(c,a){ return `rgba(${c.r},${c.g},${c.b},${a})`; }
+
+  // --- Spawning ---
+  function spawnRocket(tx, ty, strong=false){
+    const x = rand(w*0.2, w*0.8);
+    const y = h + 30;
+    const targetX = tx ?? rand(w*0.2, w*0.8);
+    const targetY = ty ?? rand(h*0.2, h*0.55);
+    rockets.push({
+      x,y, tx:targetX, ty:targetY,
+      vx: rand(-0.6,0.6),
+      vy: rand(-10,-12),
+      life:0, dur: strong?rand(1.0,1.3):rand(1.3,1.8),
+      color: palette[(rng()*palette.length)|0],
+      curve: rand(-0.5,0.5)
+    });
+  }
+
+  function explode(x,y,color){
+    const count = 80 + (rng()*80|0);
+    const petals = 6 + (rng()*6|0);
+    for(let i=0;i<count;i++){
+      const t = i/count;
+      const ang = t*Math.PI*2;
+      const mod = Math.sin(ang*petals + rand(-0.3,0.3))*0.35;
+      const spd = rand(2.0,4.5) * (1+mod);
+      const vx = Math.cos(ang+mod)*spd;
+      const vy = Math.sin(ang+mod)*spd;
+      const s = sparkPool.pop() || {};
+      s.x=x; s.y=y; s.vx=vx; s.vy=vy;
+      s.life=0; s.dur=rand(1.0,2.1);
+      s.color = color;
+      s.len = rand(6,14);
+      s.drag = rand(0.985,0.992);
+      sparks.push(s);
+    }
+
+    const emberCount = 20 + (rng()*30|0);
+    for(let i=0;i<emberCount;i++){
+      const ang = rand(0,Math.PI*2);
+      const spd = rand(0.3,1.2);
+      const e = emberPool.pop() || {};
+      e.x=x; e.y=y; e.vx=Math.cos(ang)*spd; e.vy=Math.sin(ang)*spd;
+      e.life=0; e.dur=rand(2.0,3.5);
+      e.color = color;
+      e.r = rand(1.5,3.0);
+      embers.push(e);
+    }
+
+    const ring = ringPool.pop() || {};
+    ring.x=x; ring.y=y; ring.life=0; ring.dur=rand(0.7,1.1);
+    ring.r = rand(30,60); ring.color=color;
+    rings.push(ring);
+  }
+
+  // --- Update ---
+  function update(dt){
+    // spawn rockets
+    spawnTimer += dt;
+    if(spawnTimer > 0.4){
+      spawnTimer = 0;
+      if(rockets.length < 4) spawnRocket();
+    }
+
+    // update rockets
+    for(let i=rockets.length-1;i>=0;i--){
+      const r = rockets[i];
+      r.life += dt;
+      const t = clamp(r.life/r.dur,0,1);
+      const e = easeOutCubic(t);
+      // curved path
+      r.x += (r.tx - r.x)*e*0.06 + r.vx;
+      r.y += (r.ty - r.y)*e*0.06 + r.vy + r.curve;
+      r.vx *= 0.99;
+      r.vy *= 0.98;
+      if(t>=1){
+        explode(r.tx, r.ty, r.color);
+        rockets.splice(i,1);
+      }
+    }
+
+    // update sparks
+    for(let i=sparks.length-1;i>=0;i--){
+      const p = sparks[i];
+      p.life += dt;
+      p.vx *= p.drag;
+      p.vy = p.vy * p.drag + 0.06; // gravity
+      p.x += p.vx * dt * 60;
+      p.y += p.vy * dt * 60;
+      if(p.life >= p.dur){
+        sparks.splice(i,1);
+        sparkPool.push(p);
+      }
+    }
+
+    // update embers
+    for(let i=embers.length-1;i>=0;i--){
+      const e = embers[i];
+      e.life += dt;
+      e.vx *= 0.995;
+      e.vy = e.vy * 0.995 + 0.02;
+      e.x += e.vx * dt * 60;
+      e.y += e.vy * dt * 60;
+      if(e.life >= e.dur){
+        embers.splice(i,1);
+        emberPool.push(e);
+      }
+    }
+
+    // update rings
+    for(let i=rings.length-1;i>=0;i--){
+      const r = rings[i];
+      r.life += dt;
+      if(r.life >= r.dur){
+        rings.splice(i,1);
+        ringPool.push(r);
+      }
+    }
+  }
+
+  // --- Draw ---
+  function draw(){
+    // background
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(10,10,10,0.22)';
+    ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0,0,w,h);
+
+    // stars
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    for(const s of stars){
+      s.a += Math.sin(performance.now()*s.tw)*0.002;
+      ctx.globalAlpha = clamp(s.a,0.05,0.6);
+      ctx.beginPath();
+      ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // rings
+    ctx.lineWidth = 1.2;
+    for(const r of rings){
+      const t = r.life / r.dur;
+      const e = easeInOutSine(t);
+      ctx.strokeStyle = rgba(r.color, 0.4*(1-t));
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.r + e*80, 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    // rockets
+    ctx.lineWidth = 2;
+    for(const r of rockets){
+      ctx.strokeStyle = rgba(r.color,0.8);
+      ctx.beginPath();
+      ctx.moveTo(r.x, r.y+8);
+      ctx.lineTo(r.x - r.vx*2, r.y - r.vy*2);
+      ctx.stroke();
+    }
+
+    // particles
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 1.5;
+    for(const p of sparks){
+      const t = p.life / p.dur;
+      const e = easeOutCubic(1-t);
+      ctx.strokeStyle = rgba(p.color, 0.9*e);
+      const len = p.len * e;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.vx*len, p.y - p.vy*len);
+      ctx.stroke();
+    }
+
+    // embers
+    for(const e of embers){
+      const t = e.life / e.dur;
+      const a = (1-t)*0.6;
+      ctx.fillStyle = rgba(e.color,a);
+      ctx.beginPath();
+      ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // pointer ripple
+    if(pointer.active){
+      const t = performance.now()*0.002;
+      const r = 30 + Math.sin(t)*8;
+      ctx.strokeStyle = 'rgba(79,195,247,0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(pointer.x, pointer.y, r, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+
+  // --- Loop ---
+  function loop(t){
+    const now = t*0.001;
+    const dt = Math.min(now - lastTime, 0.033) || 0.016;
+    lastTime = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>放烟花 - SVG Fireworks</title>
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#0a0a0a;}
+  svg{width:100%;height:100%;display:block;}
+  .fw{mix-blend-mode:screen;}
+  .particle{filter:url(#glow);}
+  .ring{filter:url(#glowSoft);}
+</style>
+</head>
+<body>
+<svg id="svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a0a00" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#0a0a0a" stop-opacity="1"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.4" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glowSoft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.8" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="100%" height="100%" fill="url(#bgGrad)"></rect>
+</svg>
+
+<script>
+(() => {
+  const svg = document.getElementById('svg');
+  const palette = ['#1a0a00','#8b2500','#ff4500','#ff8c00','#ffd700'];
+  let w = innerWidth, h = innerHeight;
+
+  const rand = (a=0,b=1)=>a+Math.random()*(b-a);
+  const pick = arr=>arr[(Math.random()*arr.length)|0];
+
+  const setViewBox = () => {
+    w = innerWidth; h = innerHeight;
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  };
+  addEventListener('resize', setViewBox);
+  setViewBox();
+
+  function createFirework(x, y, scale=1) {
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','fw');
+    g.setAttribute('transform', `translate(${x} ${y}) scale(${scale})`);
+    svg.appendChild(g);
+
+    // core glow
+    const core = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    const cColor = pick(palette);
+    core.setAttribute('r', rand(6,10));
+    core.setAttribute('fill', cColor);
+    core.setAttribute('opacity', '0.9');
+    core.setAttribute('class','particle');
+    const coreAnim = document.createElementNS('http://www.w3.org/2000/svg','animate');
+    coreAnim.setAttribute('attributeName','opacity');
+    coreAnim.setAttribute('values','0.9;0');
+    coreAnim.setAttribute('dur','1.6s');
+    coreAnim.setAttribute('fill','freeze');
+    core.appendChild(coreAnim);
+    g.appendChild(core);
+
+    // expanding ring
+    const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    ring.setAttribute('r', '2');
+    ring.setAttribute('fill','none');
+    ring.setAttribute('stroke', pick(palette));
+    ring.setAttribute('stroke-width','1.2');
+    ring.setAttribute('opacity','0.6');
+    ring.setAttribute('class','ring');
+    const ringR = document.createElementNS('http://www.w3.org/2000/svg','animate');
+    ringR.setAttribute('attributeName','r');
+    ringR.setAttribute('values',`2;${rand(120,180)}`);
+    ringR.setAttribute('dur','1.8s');
+    ringR.setAttribute('fill','freeze');
+    ringR.setAttribute('keyTimes','0;1');
+    ringR.setAttribute('keySplines','0.22 1 0.36 1');
+    ringR.setAttribute('calcMode','spline');
+    const ringO = document.createElementNS('http://www.w3.org/2000/svg','animate');
+    ringO.setAttribute('attributeName','opacity');
+    ringO.setAttribute('values','0.5;0');
+    ringO.setAttribute('dur','1.8s');
+    ringO.setAttribute('fill','freeze');
+    ring.appendChild(ringR);
+    ring.appendChild(ringO);
+    g.appendChild(ring);
+
+    // particles
+    const count = Math.floor(rand(80,140));
+    for (let i=0; i<count; i++){
+      const p = document.createElementNS('http://www.w3.org/2000/svg','line');
+      const len = rand(6,18);
+      p.setAttribute('x1', '0'); p.setAttribute('y1', '0');
+      p.setAttribute('x2', '0'); p.setAttribute('y2', -len);
+      p.setAttribute('stroke', pick(palette));
+      p.setAttribute('stroke-width', rand(0.6,1.4));
+      p.setAttribute('stroke-linecap','round');
+      p.setAttribute('opacity','0.9');
+      p.setAttribute('class','particle');
+
+      const ang = rand(0, Math.PI*2);
+      const dist = rand(80, 220);
+      const dx = Math.cos(ang) * dist;
+      const dy = Math.sin(ang) * dist + rand(10,40); // gravity pull
+
+      const motion = document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+      motion.setAttribute('path', `M0 0 L ${dx} ${dy}`);
+      motion.setAttribute('dur', `${rand(1.2,2.4)}s`);
+      motion.setAttribute('fill','freeze');
+      motion.setAttribute('keyTimes','0;1');
+      motion.setAttribute('keySplines','0.12 0.84 0.3 1');
+      motion.setAttribute('calcMode','spline');
+
+      const fade = document.createElementNS('http://www.w3.org/2000/svg','animate');
+      fade.setAttribute('attributeName','opacity');
+      fade.setAttribute('values','0.9;0');
+      fade.setAttribute('dur', `${rand(1.2,2.4)}s`);
+      fade.setAttribute('fill','freeze');
+
+      p.appendChild(motion);
+      p.appendChild(fade);
+      g.appendChild(p);
+    }
+
+    // subtle smoke
+    for(let i=0;i<10;i++){
+      const s = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      s.setAttribute('r', rand(8,22));
+      s.setAttribute('fill', '#ff8c00');
+      s.setAttribute('opacity','0.08');
+      s.setAttribute('class','ring');
+      const sx = rand(-20,20), sy = rand(-20,20);
+      const sm = document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+      sm.setAttribute('path', `M${sx} ${sy} L ${sx+rand(-30,30)} ${sy+rand(20,60)}`);
+      sm.setAttribute('dur', `${rand(2.0,3.5)}s`);
+      sm.setAttribute('fill','freeze');
+      const so = document.createElementNS('http://www.w3.org/2000/svg','animate');
+      so.setAttribute('attributeName','opacity');
+      so.setAttribute('values','0.08;0');
+      so.setAttribute('dur', `${rand(2.0,3.5)}s`);
+      so.setAttribute('fill','freeze');
+      s.appendChild(sm);
+      s.appendChild(so);
+      g.appendChild(s);
+    }
+
+    // cleanup
+    setTimeout(()=>{g.remove();}, 3000);
+  }
+
+  // auto launch
+  setInterval(() => {
+    const x = rand(w*0.15, w*0.85);
+    const y = rand(h*0.15, h*0.55);
+    createFirework(x,y,rand(0.8,1.2));
+  }, 700);
+
+  // pointer interaction
+  let last = 0;
+  addEventListener('pointermove', e => {
+    const now = performance.now();
+    if(now - last > 120){
+      createFirework(e.clientX, e.clientY, rand(0.6,1.0));
+      last = now;
+    }
+  });
+})();
+</script>
+</body>
+</html>

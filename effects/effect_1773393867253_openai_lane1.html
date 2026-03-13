@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>放烟花 - Ember Bloom</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#0a0a0a;}
+canvas{display:block;width:100vw;height:100vh;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, dpr;
+
+  const palette = ['#1a0a00','#3d1c00','#8b4000','#ff6600','#ffaa00'];
+  const rgbPalette = palette.map(hexToRgb);
+
+  const fireworks = [];
+  const particles = [];
+  const rings = [];
+  const sparks = [];
+  const stars = [];
+
+  const pointer = {x:0.5,y:0.5,down:false,active:false};
+  let lastTime = 0;
+  let bgCanvas, bgCtx;
+
+  // --- Utilities ---
+  function hexToRgb(hex){
+    const v = parseInt(hex.slice(1),16);
+    return {r:(v>>16)&255,g:(v>>8)&255,b:v&255};
+  }
+  function rand(min=0,max=1){return min + (max-min)*Math.random();}
+  function easeOutCubic(t){return 1 - Math.pow(1-t,3);}
+  function easeInOutSine(t){return -(Math.cos(Math.PI*t)-1)/2;}
+  function clamp(v,a,b){return v<a?a:v>b?b:v;}
+
+  // --- Resize ---
+  function resize(){
+    dpr = devicePixelRatio || 1;
+    w = innerWidth; h = innerHeight;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    // build static background
+    bgCanvas = document.createElement('canvas');
+    bgCanvas.width = w*dpr; bgCanvas.height = h*dpr;
+    bgCtx = bgCanvas.getContext('2d');
+    bgCtx.setTransform(dpr,0,0,dpr,0,0);
+
+    const g = bgCtx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#0b0b0f');
+    g.addColorStop(1,'#050505');
+    bgCtx.fillStyle = g;
+    bgCtx.fillRect(0,0,w,h);
+
+    // stars
+    stars.length = 0;
+    const starCount = Math.floor((w*h)/18000);
+    for(let i=0;i<starCount;i++){
+      const x = rand(0,w), y = rand(0,h), r = rand(0.3,1.2);
+      stars.push({x,y,r,tw:rand(0.5,1.5),ph:rand(0,Math.PI*2)});
+      bgCtx.fillStyle = `rgba(255,255,255,${rand(0.05,0.3)})`;
+      bgCtx.beginPath();
+      bgCtx.arc(x,y,r,0,Math.PI*2);
+      bgCtx.fill();
+    }
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // --- Input ---
+  addEventListener('pointermove', e=>{
+    pointer.x = e.clientX/w;
+    pointer.y = e.clientY/h;
+    pointer.active = true;
+  });
+  addEventListener('pointerdown', e=>{
+    pointer.down = true;
+    pointer.x = e.clientX/w;
+    pointer.y = e.clientY/h;
+    pointer.active = true;
+    spawnFirework(pointer.x*w, pointer.y*h);
+  });
+  addEventListener('pointerup', ()=>pointer.down=false);
+  addEventListener('pointerleave', ()=>pointer.active=false);
+
+  // --- Firework Spawning ---
+  function spawnFirework(tx = rand(0.2,0.8)*w, ty = rand(0.2,0.55)*h){
+    const startX = rand(0.1,0.9)*w;
+    const startY = h + rand(10,60);
+    const color = rgbPalette[(Math.random()*rgbPalette.length)|0];
+    fireworks.push({
+      x:startX,y:startY,tx,ty,
+      vx:(tx-startX)/60, vy:(ty-startY)/60,
+      t:0, dur: rand(1.1,1.6),
+      color,
+      trail: []
+    });
+  }
+
+  function explode(fw){
+    const baseColor = fw.color;
+    const count = 120 + (Math.random()*100|0);
+    for(let i=0;i<count;i++){
+      const ang = (i/count)*Math.PI*2 + rand(-0.15,0.15);
+      const spd = rand(1.2,3.8);
+      const life = rand(1.2,2.6);
+      particles.push({
+        x: fw.tx, y: fw.ty,
+        vx: Math.cos(ang)*spd,
+        vy: Math.sin(ang)*spd,
+        life:0, dur:life,
+        drag: rand(0.98,0.995),
+        color: baseColor,
+        size: rand(0.6,1.8)
+      });
+    }
+    // inner sparks
+    for(let i=0;i<50;i++){
+      const ang = rand(0,Math.PI*2);
+      const spd = rand(0.4,1.8);
+      sparks.push({
+        x: fw.tx, y: fw.ty,
+        vx: Math.cos(ang)*spd,
+        vy: Math.sin(ang)*spd,
+        life:0, dur: rand(0.6,1.2),
+        color: baseColor
+      });
+    }
+    // ring shockwave
+    rings.push({
+      x: fw.tx, y: fw.ty,
+      life:0, dur: rand(0.8,1.4),
+      radius: rand(40,90),
+      color: baseColor
+    });
+  }
+
+  // --- Update ---
+  function update(dt){
+    // auto spawn
+    if(fireworks.length < 4 && Math.random() < 0.05){
+      spawnFirework();
+    }
+
+    // update fireworks
+    for(let i=fireworks.length-1;i>=0;i--){
+      const f = fireworks[i];
+      f.t += dt / f.dur;
+      const t = clamp(f.t,0,1);
+      const e = easeOutCubic(t);
+      f.x = f.x + (f.tx - f.x)*e;
+      f.y = f.y + (f.ty - f.y)*e;
+
+      // trail cache
+      f.trail.push({x:f.x,y:f.y});
+      if(f.trail.length>12) f.trail.shift();
+
+      if(t>=1){
+        explode(f);
+        fireworks.splice(i,1);
+      }
+    }
+
+    // particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.life += dt;
+      const t = p.life/p.dur;
+      p.vx *= p.drag;
+      p.vy = p.vy*p.drag + 0.03;
+      p.x += p.vx*dt*60;
+      p.y += p.vy*dt*60;
+      if(t>=1) particles.splice(i,1);
+    }
+
+    // sparks
+    for(let i=sparks.length-1;i>=0;i--){
+      const s = sparks[i];
+      s.life += dt;
+      const t = s.life/s.dur;
+      s.vx *= 0.96;
+      s.vy = s.vy*0.96 + 0.01;
+      s.x += s.vx*dt*60;
+      s.y += s.vy*dt*60;
+      if(t>=1) sparks.splice(i,1);
+    }
+
+    // rings
+    for(let i=rings.length-1;i>=0;i--){
+      const r = rings[i];
+      r.life += dt;
+      if(r.life>=r.dur) rings.splice(i,1);
+    }
+  }
+
+  // --- Draw ---
+  function draw(time){
+    // background static
+    ctx.drawImage(bgCanvas,0,0,w,h);
+
+    // subtle animated haze
+    ctx.fillStyle = 'rgba(10,10,10,0.18)';
+    ctx.fillRect(0,0,w,h);
+
+    // twinkle
+    ctx.globalCompositeOperation = 'lighter';
+    for(const s of stars){
+      const tw = (Math.sin(time*0.6 + s.ph) * 0.5 + 0.5) * s.tw;
+      ctx.fillStyle = `rgba(255,255,255,${0.02+0.08*tw})`;
+      ctx.beginPath();
+      ctx.arc(s.x,s.y,s.r* (0.7+0.6*tw),0,Math.PI*2);
+      ctx.fill();
+    }
+
+    // rings
+    ctx.globalCompositeOperation = 'lighter';
+    for(const r of rings){
+      const t = r.life / r.dur;
+      const e = easeInOutSine(t);
+      ctx.strokeStyle = `rgba(${r.color.r},${r.color.g},${r.color.b},${0.5*(1-t)})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(r.x,r.y,r.radius*e,0,Math.PI*2);
+      ctx.stroke();
+    }
+
+    // firework trails
+    ctx.globalCompositeOperation = 'source-over';
+    for(const f of fireworks){
+      if(f.trail.length>1){
+        ctx.strokeStyle = `rgba(${f.color.r},${f.color.g},${f.color.b},0.7)`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for(let i=0;i<f.trail.length;i++){
+          const p = f.trail[i];
+          if(i===0) ctx.moveTo(p.x,p.y);
+          else ctx.lineTo(p.x,p.y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // particles & sparks glow
+    ctx.globalCompositeOperation = 'lighter';
+    for(const p of particles){
+      const t = p.life/p.dur;
+      const e = easeOutCubic(1-t);
+      ctx.strokeStyle = `rgba(${p.color.r},${p.color.g},${p.color.b},${0.9*e})`;
+      ctx.lineWidth = p.size;
+      const len = 8*e;
+      ctx.beginPath();
+      ctx.moveTo(p.x,p.y);
+      ctx.lineTo(p.x - p.vx*len, p.y - p.vy*len);
+      ctx.stroke();
+    }
+    for(const s of sparks){
+      const t = s.life/s.dur;
+      const e = easeOutCubic(1-t);
+      ctx.fillStyle = `rgba(${s.color.r},${s.color.g},${s.color.b},${0.8*e})`;
+      ctx.beginPath();
+      ctx.arc(s.x,s.y,1.2*e,0,Math.PI*2);
+      ctx.fill();
+    }
+
+    // pointer ripple
+    if(pointer.active){
+      const px = pointer.x*w;
+      const py = pointer.y*h;
+      const r = 24 + 8*Math.sin(time*2.2);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,170,0,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(px,py,r,0,Math.PI*2);
+      ctx.stroke();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function loop(t){
+    const now = t*0.001;
+    const dt = Math.min(now - lastTime, 0.033) || 0.016;
+    lastTime = now;
+    update(dt);
+    draw(now);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

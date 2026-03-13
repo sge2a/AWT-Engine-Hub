@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fireworks Aurora</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0a0a0a;
+  }
+  svg {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    background: #0a0a0a;
+  }
+  .particle {
+    mix-blend-mode: screen;
+    filter: url(#blur);
+  }
+  .aurora {
+    mix-blend-mode: screen;
+    filter: url(#softBlur);
+    opacity: 0.7;
+  }
+  .glow {
+    mix-blend-mode: screen;
+    filter: url(#softBlur);
+    opacity: 0.4;
+  }
+</style>
+</head>
+<body>
+<svg id="svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+    <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+    <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0fff95" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#7b2ff7" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#0d0221" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="100%" height="100%" fill="#0a0a0a"/>
+
+  <!-- Aurora Blobs -->
+  <g id="auroraLayer"></g>
+
+  <!-- Fireworks -->
+  <g id="fireworks"></g>
+
+  <!-- Pointer Glow -->
+  <circle id="pointerGlow" class="glow" r="120" fill="url(#glowGrad)" cx="500" cy="500"></circle>
+</svg>
+
+<script>
+(() => {
+  const svg = document.getElementById('svg');
+  const fireworks = document.getElementById('fireworks');
+  const auroraLayer = document.getElementById('auroraLayer');
+  const pointerGlow = document.getElementById('pointerGlow');
+  const palette = ["#0d0221","#0a4a3a","#0fff95","#7b2ff7","#ff2ea0"];
+
+  // Seeded RNG
+  let seed = 582696610867 % 2147483647;
+  const rand = () => (seed = seed * 48271 % 2147483647) / 2147483647;
+
+  // Aurora blobs
+  for (let i = 0; i < 6; i++) {
+    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    const r = 250 + rand()*200;
+    c.setAttribute("class", "aurora");
+    c.setAttribute("r", r);
+    c.setAttribute("fill", palette[Math.floor(rand()*palette.length)]);
+    c.setAttribute("cx", rand()*1000);
+    c.setAttribute("cy", rand()*1000);
+    c.setAttribute("opacity", 0.5 + rand()*0.4);
+
+    const animX = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+    animX.setAttribute("attributeName", "cx");
+    animX.setAttribute("values", `${rand()*1000};${rand()*1000};${rand()*1000}`);
+    animX.setAttribute("dur", `${30 + rand()*20}s`);
+    animX.setAttribute("repeatCount", "indefinite");
+    animX.setAttribute("keySplines", "0.42 0 0.58 1;0.42 0 0.58 1");
+    animX.setAttribute("calcMode", "spline");
+
+    const animY = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+    animY.setAttribute("attributeName", "cy");
+    animY.setAttribute("values", `${rand()*1000};${rand()*1000};${rand()*1000}`);
+    animY.setAttribute("dur", `${35 + rand()*25}s`);
+    animY.setAttribute("repeatCount", "indefinite");
+    animY.setAttribute("keySplines", "0.42 0 0.58 1;0.42 0 0.58 1");
+    animY.setAttribute("calcMode", "spline");
+
+    c.appendChild(animX);
+    c.appendChild(animY);
+    auroraLayer.appendChild(c);
+  }
+
+  // Fireworks bursts
+  const burstCount = 9;
+  for (let b = 0; b < burstCount; b++) {
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    const cx = rand()*1000;
+    const cy = 200 + rand()*600;
+    g.setAttribute("transform", `translate(${cx}, ${cy})`);
+
+    const particleCount = 40 + Math.floor(rand()*30);
+    const baseDelay = rand()*5;
+
+    for (let i = 0; i < particleCount; i++) {
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      p.setAttribute("class", "particle");
+      p.setAttribute("r", 1.5 + rand()*2.5);
+      p.setAttribute("fill", palette[Math.floor(rand()*palette.length)]);
+      p.setAttribute("opacity", "0");
+
+      const angle = rand()*Math.PI*2;
+      const dist = 150 + rand()*200;
+      const dx = Math.cos(angle)*dist;
+      const dy = Math.sin(angle)*dist;
+
+      const dur = 2.5 + rand()*2.5;
+      const begin = `${baseDelay + rand()*dur}s`;
+
+      const animX = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      animX.setAttribute("attributeName", "cx");
+      animX.setAttribute("values", `0;${dx}`);
+      animX.setAttribute("dur", `${dur}s`);
+      animX.setAttribute("begin", begin);
+      animX.setAttribute("repeatCount", "indefinite");
+      animX.setAttribute("keySplines", "0.42 0 0.58 1");
+      animX.setAttribute("calcMode", "spline");
+
+      const animY = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      animY.setAttribute("attributeName", "cy");
+      animY.setAttribute("values", `0;${dy}`);
+      animY.setAttribute("dur", `${dur}s`);
+      animY.setAttribute("begin", begin);
+      animY.setAttribute("repeatCount", "indefinite");
+      animY.setAttribute("keySplines", "0.42 0 0.58 1");
+      animY.setAttribute("calcMode", "spline");
+
+      const animO = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      animO.setAttribute("attributeName", "opacity");
+      animO.setAttribute("values", `0;1;0`);
+      animO.setAttribute("dur", `${dur}s`);
+      animO.setAttribute("begin", begin);
+      animO.setAttribute("repeatCount", "indefinite");
+      animO.setAttribute("keyTimes", "0;0.2;1");
+      animO.setAttribute("keySplines", "0.42 0 0.58 1;0.42 0 0.58 1");
+      animO.setAttribute("calcMode", "spline");
+
+      const animR = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      animR.setAttribute("attributeName", "r");
+      animR.setAttribute("values", `${p.getAttribute("r")};0`);
+      animR.setAttribute("dur", `${dur}s`);
+      animR.setAttribute("begin", begin);
+      animR.setAttribute("repeatCount", "indefinite");
+      animR.setAttribute("keySplines", "0.42 0 0.58 1");
+      animR.setAttribute("calcMode", "spline");
+
+      p.appendChild(animX);
+      p.appendChild(animY);
+      p.appendChild(animO);
+      p.appendChild(animR);
+      g.appendChild(p);
+    }
+    fireworks.appendChild(g);
+  }
+
+  // Pointer interaction
+  let mx = 500, my = 500;
+  window.addEventListener("pointermove", e => {
+    const rect = svg.getBoundingClientRect();
+    mx = (e.clientX - rect.left) / rect.width * 1000;
+    my = (e.clientY - rect.top) / rect.height * 1000;
+  });
+
+  const animate = () => {
+    pointerGlow.setAttribute("cx", mx);
+    pointerGlow.setAttribute("cy", my);
+    requestAnimationFrame(animate);
+  };
+  animate();
+})();
+</script>
+</body>
+</html>
