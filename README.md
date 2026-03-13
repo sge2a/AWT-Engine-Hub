@@ -2,10 +2,15 @@
 
 A static GitHub Pages gallery for **AWT-generated** visual effects.
 
+## What’s new
+- AWT-style UI (same card layout + neon theme).
+- Pagination (12 cards per page).
+- GitHub Actions auto-builds `effects/index.json` when HTML files are added.
+
 ## How it works
 - Effects are stored as self‑contained HTML files in `effects/`.
 - `effects/index.json` is the gallery index. The website reads this file to render cards.
-- Contributions are made via Pull Request.
+- Contributions are made via Pull Request. You only need to add HTML; the index is auto-generated.
 
 ## Pagination
 - Default page size: **12** cards per page.
@@ -18,22 +23,9 @@ AWT Engine Hub accepts the same filename format so you can drop in downloaded fi
 ## Submit an effect (via PR)
 1. **Add your effect HTML** (no external assets):
    - `effects/effect_<id>_<modelId>.html`
-2. **Add metadata entry** to `effects/index.json`:
+2. **Open a Pull Request**.
 
-```json
-{
-  "id": "effect_10_openai",
-  "title": "Magnetic Field Lines",
-  "model": "OpenAI GPT (gpt-5.2-codex)",
-  "theme": "magnetic field lines with floating iron particles",
-  "technique": "HTML5 Canvas 2D",
-  "created_at": "2026-03-12 13:59:41",
-  "html": "effects/effect_10_openai.html",
-  "code": "effects/effect_10_openai.html"
-}
-```
-
-3. **Open a Pull Request**.
+> The GitHub Actions workflow will automatically generate `effects/index.json` on push/PR.
 
 ## Rules
 - Single HTML file only; no external libraries/CDNs.
